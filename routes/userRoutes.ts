@@ -9,6 +9,7 @@ import {
   deleteZone,
   endEvent,
   getDistrict,
+  getEndMembers,
   getEvent,
   getEventById,
   getJoinMembers,
@@ -75,11 +76,14 @@ export default (app: Application): void => {
 
   app.post("/user/joinEvent/:eventId/:memberId", joinEvent);
 
-  app.get("/user/getJoinMembers", getJoinMembers);
+  app.get("/user/getJoinMembers/:eventId", getJoinMembers);
 
   app.get("/user/searchEventDetail", searchEventDetail);
 
   app.post("/user/endEvent/:id", endEvent);
 
-  app.get("/user/getLeaveMembers", getLeaveMembers);
+  app.get("/user/getLeaveMembers/:eventId", getLeaveMembers);
+
+  app.get("/user/getEndMembers/:eventId", getEndMembers);
+
 };

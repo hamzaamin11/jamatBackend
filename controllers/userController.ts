@@ -1072,7 +1072,6 @@ export const joinEvent = async (req: Request, res: Response): Promise<void> => {
         [formattedWorkingHours.trim(), memberId, eventId]
       );
 
-
       const [finalData]: any = await pool.query(
         "SELECT * FROM tbl_events_detail WHERE memberId = ? AND eventId = ?",
         [memberId, eventId]
@@ -1095,6 +1094,7 @@ export const getJoinMembers = async (
   res: Response
 ): Promise<void> => {
   try {
+    const eventId = req.params.eventId;
     const page = parseInt(req.query.page as string, 10) || 1; // Default page = 1
     const limit = 10; // Show 10 entries per page
     const offset = (page - 1) * limit; // Calculate offset for pagination
@@ -1103,9 +1103,9 @@ export const getJoinMembers = async (
       `SELECT e.*, m.*
   FROM tbl_events_detail e
   JOIN tbl_members m ON e.memberId = m.id
-  WHERE e.eventStatus = 'Join'
+  WHERE e.eventStatus = 'Join' and eventId = ?
   LIMIT ? OFFSET ?`,
-      [limit, offset]
+      [eventId, limit, offset]
     );
     // Fetch total number of join members for pagination info
     const [countResult]: any = await pool.query(
@@ -1282,9 +1282,13 @@ export const endEvent = async (req: Request, res: Response): Promise<void> => {
       `update tbl_events_detail set eventStatus = 'End' where eventId = ?`,
       [eventId]
     );
-    await pool.query(`update tbl_events_detail set eventStatus = 'End' where eventStatus = 'Leave' `);
+    await pool.query(
+      `update tbl_events_detail set eventStatus = 'End' where eventStatus = 'Leave' `
+    );
 
-    await pool.query(`update tbl_members set joinStatus = 'Y' where joinStatus = 'N'`);
+    await pool.query(
+      `update tbl_members set joinStatus = 'Y' where joinStatus = 'N'`
+    );
 
     // ✅ Fetch final event details
     const [endedEvent]: any = await pool.query(
@@ -1309,6 +1313,7 @@ export const getLeaveMembers = async (
   res: Response
 ): Promise<void> => {
   try {
+    const eventId = req.params.eventId;
     const page = parseInt(req.query.page as string, 10) || 1; // Default page = 1
     const limit = 10; // Show 10 entries per page
     const offset = (page - 1) * limit; // Calculate offset for pagination
@@ -1317,9 +1322,9 @@ export const getLeaveMembers = async (
       `SELECT e.*, m.*
   FROM tbl_events_detail e
   JOIN tbl_members m ON e.memberId = m.id
-  WHERE e.eventStatus = 'Leave'
+  WHERE e.eventStatus = 'Leave' and eventId = ?
   LIMIT ? OFFSET ?`,
-      [limit, offset]
+      [eventId, limit, offset]
     );
     // Fetch total number of leave members for pagination info
     const [countResult]: any = await pool.query(
@@ -1334,10 +1339,50 @@ export const getLeaveMembers = async (
       return;
     }
 
-
     res.status(200).json(query);
   } catch (error) {
     console.error("❌ Error fetching leave members:", error);
+    res.status(500).json({ status: 500, message: "Internal Server Error" });
+  }
+};
+
+
+
+
+
+export const getEndMembers = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const eventId = req.params.eventId;
+    const page = parseInt(req.query.page as string, 10) || 1; // Default page = 1
+    const limit = 10; // Show 10 entries per page
+    const offset = (page - 1) * limit; // Calculate offset for pagination
+    // Fetch paginated joined members with JOIN
+    const [query]: any = await pool.query(
+      `SELECT e.*, m.*
+  FROM tbl_events_detail e
+  JOIN tbl_members m ON e.memberId = m.id
+  WHERE e.eventStatus = 'End' and eventId = ?
+  LIMIT ? OFFSET ?`,
+      [eventId, limit, offset]
+    );
+    // Fetch total number of join members for pagination info
+    const [countResult]: any = await pool.query(
+      `SELECT COUNT(*) AS total
+  FROM tbl_events_detail
+  WHERE eventStatus = 'End'`
+    );
+    const totalEntries = countResult[0].total;
+    const totalPages = Math.ceil(totalEntries / limit);
+    if (query.length === 0) {
+      res.status(404).json({ message: "No joined members found!" });
+      return;
+    }
+    res.status(200).json(query);
+  } catch (error) {
+    console.error("❌ Error fetching joined members:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
