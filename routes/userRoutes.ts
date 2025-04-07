@@ -1,4 +1,6 @@
 import express, { Application, Request, Response } from "express";
+import { upload } from "../middleware/uploadMiddleware"; 
+
 import {
   addDistrict,
   addEvent,
@@ -14,6 +16,7 @@ import {
   getEventById,
   getJoinMembers,
   getLeaveMembers,
+  getMemberImage,
   getMembers,
   getZone,
   joinEvent,
@@ -27,12 +30,17 @@ import {
   updateEvent,
   updateMember,
   updateZone,
+  uploadImage,
 } from "../controllers/userController";
 import { authenticateToken } from "../middleware/authMiddleware";
 
 export default (app: Application): void => {
   //login routes:
   app.post("/login", login);
+
+  app.get("/user/member-image/:id", getMemberImage);
+
+  app.post('/user/uploadImage',  upload.single("image"), uploadImage);
 
   app.post("/user/registerMember", registerMember);
 

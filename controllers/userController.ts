@@ -5,6 +5,10 @@ import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
 
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
+
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -162,6 +166,53 @@ export const registerMember = async (
   } catch (error) {
     console.error(" Error adding a member:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
+  }
+};
+
+export const getMemberImage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const memberId = req.params.id;
+
+    const [rows]: any = await pool.query("SELECT image FROM tbl_members WHERE id = ?", [memberId]);
+
+    if (!rows || rows.length === 0) {
+      res.status(404).json({ message: "Member not found" });
+      return;
+    }
+
+    const imagePath = rows[0].image;
+
+    if (!fs.existsSync(imagePath)) {
+      res.status(404).json({ message: "Image file not found on server" });
+      return;
+    }
+
+    const absolutePath = path.resolve(imagePath);
+    res.sendFile(absolutePath);
+  } catch (error) {
+    console.error("Error fetching image:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const uploadImage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const uploadedImage = (req as MulterRequest).file;
+
+    if (!uploadedImage) {
+      res.status(400).json({ message: "No image file uploaded" });
+      return;
+    }
+
+    const imagePath = path.join("uploads/images/", uploadedImage.filename);
+
+    res.status(200).json({
+      message: "Image uploaded successfully",
+      imagePath,
+    });
+  } catch (error) {
+    console.error("Image upload error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
