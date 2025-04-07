@@ -1397,10 +1397,6 @@ export const getLeaveMembers = async (
   }
 };
 
-
-
-
-
 export const getEndMembers = async (
   req: Request,
   res: Response
@@ -1435,5 +1431,49 @@ export const getEndMembers = async (
   } catch (error) {
     console.error("❌ Error fetching joined members:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
+  }
+};
+
+export const searchZones = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const searchTerm = req.query.q as string;
+
+    if (!searchTerm) {
+      res.status(400).json({ message: "Search query (q) is required" });
+      return;
+    }
+
+    const [rows]: any = await pool.query(
+      `SELECT DISTINCT zone FROM tbl_configuration 
+       WHERE status = 'Y' AND zone IS NOT NULL AND zone LIKE ?`,
+      [`%${searchTerm}%`]
+    );
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("Zone Search Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const searchDistricts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const searchTerm = req.query.q as string;
+
+    if (!searchTerm) {
+      res.status(400).json({ message: "Search query (q) is required" });
+      return;
+    }
+
+    const [rows]: any = await pool.query(
+      `SELECT DISTINCT district FROM tbl_configuration 
+       WHERE status = 'Y' AND district IS NOT NULL AND district LIKE ?`,
+      [`%${searchTerm}%`]
+    );
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("District Search Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };

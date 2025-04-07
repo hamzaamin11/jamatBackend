@@ -1,5 +1,5 @@
 import express, { Application, Request, Response } from "express";
-import { upload } from "../middleware/uploadMiddleware"; 
+import { upload } from "../middleware/uploadMiddleware";
 
 import {
   addDistrict,
@@ -22,9 +22,11 @@ import {
   joinEvent,
   login,
   registerMember,
+  searchDistricts,
   searchEvent,
   searchEventDetail,
   searchMember,
+  searchZones,
   startEvent,
   updateDistrict,
   updateEvent,
@@ -40,7 +42,7 @@ export default (app: Application): void => {
 
   app.get("/user/member-image/:id", getMemberImage);
 
-  app.post('/user/uploadImage',  upload.single("image"), uploadImage);
+  app.post("/user/uploadImage", upload.single("image"), uploadImage);
 
   app.post("/user/registerMember", registerMember);
 
@@ -94,4 +96,7 @@ export default (app: Application): void => {
 
   app.get("/user/getEndMembers/:eventId", getEndMembers);
 
+  app.get("/user/searchDistricts", searchDistricts);
+
+  app.get('/user/searchZones', searchZones);
 };
