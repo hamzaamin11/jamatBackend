@@ -10,21 +10,24 @@ import {
   deleteMember,
   deleteZone,
   endEvent,
+  eventDetailReport,
+  EventReport,
   getDistrict,
   getEndMembers,
   getEvent,
   getEventById,
   getJoinMembers,
   getLeaveMembers,
-  getMemberImage,
   getMembers,
   getZone,
   joinEvent,
   login,
+  membersReport,
   registerMember,
   searchDistricts,
   searchEvent,
   searchEventDetail,
+  searchIndividualPresent,
   searchMember,
   searchZones,
   startEvent,
@@ -40,17 +43,15 @@ export default (app: Application): void => {
   //login routes:
   app.post("/login", login);
 
-  app.get("/user/member-image/:id", getMemberImage);
-
   app.post("/user/uploadImage", upload.single("image"), uploadImage);
 
-  app.post("/user/registerMember", registerMember);
+  app.post("/user/registerMember", upload.single("image"), registerMember);
 
   app.get("/user/getMembers", getMembers);
 
   app.patch("/user/deleteMember/:id", deleteMember);
 
-  app.put("/user/updateMember/:id", updateMember);
+  app.put("/user/updateMember/:id", upload.single("image"), updateMember);
 
   app.post("/user/addDistrict", addDistrict);
 
@@ -68,11 +69,11 @@ export default (app: Application): void => {
 
   app.patch("/user/deleteZone/:id", deleteZone);
 
-  app.post("/user/addEvent", addEvent);
+  app.post("/user/addEvent", upload.single("image"), addEvent);
 
-  app.get("/user/getEvent/:entry", getEvent);
+  app.get("/user/getEvent", getEvent);
 
-  app.put("/user/updateEvent/:id", updateEvent);
+  app.put("/user/updateEvent/:id", upload.single("image"), updateEvent);
 
   app.patch("/user/deleteEvent/:id", deleteEvent);
 
@@ -98,5 +99,13 @@ export default (app: Application): void => {
 
   app.get("/user/searchDistricts", searchDistricts);
 
-  app.get('/user/searchZones', searchZones);
+  app.get("/user/searchZones", searchZones);
+
+  app.get("/user/membersReport", membersReport);
+
+  app.get("/user/eventReport", EventReport);
+
+  app.get("/user/individualMemberReport", eventDetailReport);
+
+  app.get("/user/searchIndividualPresent", searchIndividualPresent);
 };

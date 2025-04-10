@@ -91,7 +91,6 @@ export const registerMember = async (
     const {
       zone,
       profession,
-      image,
       mobileNumber,
       fullName,
       fatherName,
@@ -104,6 +103,7 @@ export const registerMember = async (
       address,
     } = req.body;
 
+    // ⛔ Check for missing fields
     if (
       !zone ||
       !profession ||
@@ -113,32 +113,30 @@ export const registerMember = async (
       !email ||
       !education ||
       !dob ||
+      !district ||
       !cnic ||
       !age ||
-      !address ||
-      !district
+      !address
     ) {
-      res.json({ message: "All fields are required!" });
+      res.status(400).json({ message: "All fields are required." });
+      return;
+    }
+
+    // ✅ Now get the uploaded image path
+    const imagePath = req.file?.path; // from multer
+
+    if (!imagePath) {
+      res.status(400).json({ message: "Image upload failed or missing." });
       return;
     }
 
     const query = `
       INSERT INTO tbl_members (
-        fullName,
-          fatherName,
-          zone,
-          mobileNumber,
-          address,
-          education,
-          email,
-          cnic,
-          dob,
-          district,
-          age, 
-          profession,
-          image
+        fullName, fatherName, zone, mobileNumber,
+        address, education, email, cnic, dob,
+        district, age, profession, image
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
+    `;
 
     const values = [
       fullName,
@@ -153,49 +151,109 @@ export const registerMember = async (
       district,
       age,
       profession,
-      image,
+      imagePath,
     ];
 
     const [result]: any = await pool.query(query, values);
 
-    const [getResult]: any = await pool.query(
-      `select * from tbl_members where email = ?`,
-      [email]
-    );
-    res.status(201).json(req.body);
+    console.log("✅ Member added:", fullName, "📸 image saved at:", imagePath);
+
+    res.status(201).json({
+      message: "Member registered successfully",
+      member: {
+        fullName,
+        email,
+        image: imagePath,
+      },
+    });
   } catch (error) {
-    console.error(" Error adding a member:", error);
-    res.status(500).json({ status: 500, message: "Internal Server Error" });
-  }
-};
-
-export const getMemberImage = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const memberId = req.params.id;
-
-    const [rows]: any = await pool.query("SELECT image FROM tbl_members WHERE id = ?", [memberId]);
-
-    if (!rows || rows.length === 0) {
-      res.status(404).json({ message: "Member not found" });
-      return;
-    }
-
-    const imagePath = rows[0].image;
-
-    if (!fs.existsSync(imagePath)) {
-      res.status(404).json({ message: "Image file not found on server" });
-      return;
-    }
-
-    const absolutePath = path.resolve(imagePath);
-    res.sendFile(absolutePath);
-  } catch (error) {
-    console.error("Error fetching image:", error);
+    console.error("🔥 Error in registerMember:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-export const uploadImage = async (req: Request, res: Response): Promise<void> => {
+// export const registerMember = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const {
+//       zone,
+//       profession,
+//       mobileNumber,
+//       fullName,
+//       fatherName,
+//       email,
+//       education,
+//       dob,
+//       district,
+//       cnic,
+//       age,
+//       address,
+//     } = req.body;
+
+//     // ⛔ Check for missing fields
+//     if (
+//       !zone || !profession || !mobileNumber || !fullName ||
+//       !fatherName || !email || !education || !dob || !district ||
+//       !cnic || !age || !address
+//     ) {
+//        res.status(400).json({ message: "All fields are required." });
+//     }
+
+//     // ✅ Now get the uploaded image path
+//     const imagePath = req.file?.path; // from multer
+
+//     if (!imagePath) {
+//        res.status(400).json({ message: "Image upload failed or missing." });
+//     }
+
+//     const query = `
+//       INSERT INTO tbl_members (
+//         fullName, fatherName, zone, mobileNumber,
+//         address, education, email, cnic, dob,
+//         district, age, profession, image
+//       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+//     `;
+
+//     const values = [
+//       fullName,
+//       fatherName,
+//       zone,
+//       mobileNumber,
+//       address,
+//       education,
+//       email,
+//       cnic,
+//       dob,
+//       district,
+//       age,
+//       profession,
+//       imagePath,
+//     ];
+
+//     const [result]: any = await pool.query(query, values);
+
+//     console.log("✅ Member added:", fullName, "📸 image saved at:", imagePath);
+
+//     res.status(201).json({
+//       message: "Member registered successfully",
+//       member: {
+//         fullName,
+//         email,
+//         image: imagePath,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("🔥 Error in registerMember:", error);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
+
+export const uploadImage = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const uploadedImage = (req as MulterRequest).file;
 
@@ -217,54 +275,95 @@ export const uploadImage = async (req: Request, res: Response): Promise<void> =>
 };
 
 /*get members*/
+
 export const getMembers = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const page = parseInt(req.query.page as string, 10) || 1; // Get page number, default to 1
-    const limit = 10; // Show 10 entries per page
-    const offset = (page - 1) * limit; // Calculate offset for pagination
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = 10;
+    const offset = (page - 1) * limit;
 
-    const [query]: any = await pool.query(
+    const [rows]: any = await pool.query(
       `
-          SELECT 
-              id, 
-              fullName, 
-              fatherName, 
-              zone, 
-              mobileNumber, 
-              address, 
-              education, 
-              email, 
-              cnic, 
-              district, 
-              age, 
-              profession, 
-             image, 
-              DATE_FORMAT(CONVERT_TZ(dob, '+00:00', @@session.time_zone), '%Y-%m-%d') AS dob
-          FROM tbl_members
-          WHERE status = 'Y'
-          LIMIT ? OFFSET ?`,
+      SELECT 
+        id, 
+        fullName, 
+        fatherName, 
+        zone, 
+        mobileNumber, 
+        address, 
+        education, 
+        email, 
+        cnic, 
+        district, 
+        age, 
+        profession, 
+        image, 
+        DATE_FORMAT(CONVERT_TZ(dob, '+00:00', @@session.time_zone), '%Y-%m-%d') AS dob
+      FROM tbl_members
+      WHERE status = 'Y'
+      LIMIT ? OFFSET ?
+    `,
       [limit, offset]
     );
 
-    // Fetch total number of entries for pagination info
     const [countResult]: any = await pool.query(`
-          SELECT COUNT(*) AS total FROM tbl_members WHERE status = 'Y'
-      `);
-    const totalEntries = countResult[0].total;
+      SELECT COUNT(*) AS total FROM tbl_members WHERE status = 'Y'
+    `);
+
+    const totalEntries = countResult[0]?.total || 0;
     const totalPages = Math.ceil(totalEntries / limit);
 
-    if (!query || query.length === 0) {
+    if (!rows || rows.length === 0) {
       res.status(404).json({ message: "No users found!" });
       return;
     }
 
-    res.status(200).json(query);
+    const members = await Promise.all(
+      rows.map(async (member: any) => {
+        let image: string | null = null;
+
+        if (member.image && fs.existsSync(member.image)) {
+          try {
+            const imageBuffer = fs.readFileSync(path.resolve(member.image));
+            const mimeType =
+              path.extname(member.image).toLowerCase() === ".png"
+                ? "image/png"
+                : "image/jpeg";
+            image = `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+          } catch (error) {
+            console.error(
+              `⚠️ Error reading image for member ${member.id}:`,
+              error
+            );
+          }
+        }
+
+        return {
+          id: member.id,
+          fullName: member.fullName,
+          fatherName: member.fatherName,
+          zone: member.zone,
+          mobileNumber: member.mobileNumber,
+          address: member.address,
+          education: member.education,
+          email: member.email,
+          cnic: member.cnic,
+          district: member.district,
+          age: member.age,
+          profession: member.profession,
+          dob: member.dob,
+          image,
+        };
+      })
+    );
+
+    res.status(200).json(members);
   } catch (error) {
     console.error("❌ Error fetching members:", error);
-    res.status(500).json({ status: 500, message: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -300,17 +399,16 @@ export const deleteMember = async (
 };
 
 /* update member */
-
 export const updateMember = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { id } = req.params;
+
     const {
       zone,
       profession,
-      image,
       mobileNumber,
       fullName,
       fatherName,
@@ -321,12 +419,14 @@ export const updateMember = async (
       cnic,
       age,
       address,
+      image: imageFromBody, // in case provided manually (e.g. Postman)
     } = req.body;
+
+    const newImagePath = req.file?.path; // multer-uploaded image
 
     if (
       !zone ||
       !profession ||
-      !image ||
       !mobileNumber ||
       !fullName ||
       !fatherName ||
@@ -337,7 +437,7 @@ export const updateMember = async (
       !age ||
       !address
     ) {
-      res.status(400).json({ message: "All fields are required!" });
+      res.status(400).json({ message: "All required fields must be filled!" });
       return;
     }
 
@@ -345,28 +445,39 @@ export const updateMember = async (
       `SELECT * FROM tbl_members WHERE id = ?`,
       [id]
     );
+
     if (existingMember.length === 0) {
       res.status(404).json({ message: "Member not found!" });
       return;
     }
 
+    const oldImagePath = existingMember[0].image;
+
+    // Determine final image path
+    const finalImagePath = newImagePath || imageFromBody || oldImagePath;
+
+    // Optional: delete old image if new one is uploaded
+    if (newImagePath && oldImagePath && fs.existsSync(oldImagePath)) {
+      fs.unlinkSync(oldImagePath);
+    }
+
     const query = `
-          UPDATE tbl_members SET
-          fullName = ?,
-          fatherName = ?,
-          zone = ?,
-          mobileNumber = ?,
-          address = ?,
-          education = ?,
-          email = ?,
-          cnic = ?,
-          dob = ?,
-          district = ?,
-          age = ?, 
-          profession = ?,
-          image =?
-          WHERE id = ?
-      `;
+      UPDATE tbl_members SET
+        fullName = ?,
+        fatherName = ?,
+        zone = ?,
+        mobileNumber = ?,
+        address = ?,
+        education = ?,
+        email = ?,
+        cnic = ?,
+        dob = ?,
+        district = ?,
+        age = ?, 
+        profession = ?,
+        image = ?
+      WHERE id = ?
+    `;
 
     const values = [
       fullName,
@@ -381,7 +492,7 @@ export const updateMember = async (
       district,
       age,
       profession,
-      image,
+      finalImagePath,
       id,
     ];
 
@@ -399,7 +510,7 @@ export const updateMember = async (
 
     res.status(200).json(updatedMember[0]);
   } catch (error) {
-    console.error(" Error updating member:", error);
+    console.error("❌ Error updating member:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
@@ -440,16 +551,39 @@ export const getDistrict = async (
   res: Response
 ): Promise<void> => {
   try {
-    const [query]: any = await pool.query(
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = 10;
+    const offset = (page - 1) * limit;
+
+    // Get paginated districts
+    const [rows]: any = await pool.query(
       `SELECT id, district 
-      FROM tbl_configuration 
-      WHERE status = 'Y' 
-      AND district IS NOT NULL`
+       FROM tbl_configuration 
+       WHERE status = 'Y' 
+         AND district IS NOT NULL 
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
 
-    res.status(200).send(query);
+    // Get total count
+    const [countResult]: any = await pool.query(
+      `SELECT COUNT(*) AS total 
+       FROM tbl_configuration 
+       WHERE status = 'Y' 
+         AND district IS NOT NULL`
+    );
+
+    const total = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    if (!rows || rows.length === 0) {
+      res.status(404).json({ message: "No districts found!" });
+      return;
+    }
+
+    res.status(200).json(rows);
   } catch (error) {
-    console.error(" Error getting district!:", error);
+    console.error("❌ Error getting district:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
@@ -544,15 +678,39 @@ export const addZone = async (req: Request, res: Response): Promise<void> => {
 
 export const getZone = async (req: Request, res: Response): Promise<void> => {
   try {
-    const [query]: any = await pool.query(
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = 10;
+    const offset = (page - 1) * limit;
+
+    // Get paginated records
+    const [rows]: any = await pool.query(
       `SELECT id, zone 
-        FROM tbl_configuration 
-        WHERE status = 'Y' 
-        AND zone IS NOT NULL`
+       FROM tbl_configuration 
+       WHERE status = 'Y' 
+         AND zone IS NOT NULL 
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
-    res.status(200).send(query);
+
+    const [countResult]: any = await pool.query(
+      `SELECT COUNT(*)
+ AS total 
+       FROM tbl_configuration 
+       WHERE status = 'Y' 
+         AND zone IS NOT NULL`
+    );
+
+    const total = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    if (!rows || rows.length === 0) {
+      res.status(404).json({ message: "No zones found!" });
+      return;
+    }
+
+    res.status(200).json(rows);
   } catch (error) {
-    console.error(" Error getting Zone!:", error);
+    console.error("❌ Error getting Zone:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
@@ -620,6 +778,88 @@ export const deleteZone = async (
 
 /*add event */
 
+// export const addEvent = async (req: Request, res: Response): Promise<void> => {
+//   try {
+//     const {
+//       eventName,
+//       date,
+//       location,
+//       description,
+//       image,
+//       focalPersonName,
+//       focalPersonNumber,
+//       focalPersonEmail,
+//       infoPersonName,
+//       infoPersonNumber,
+//       infoPersonEmail,
+//       eventType,
+//     } = req.body;
+
+//     const [existingEvent]: any = await pool.query(
+//       `select * from tbl_event where eventName= ?`,
+//       [eventName]
+//     );
+
+//     if (existingEvent.lenght > 0) {
+//       res.send({ message: "Event already Exist!" });
+//       return;
+//     }
+//     if (
+//       !eventName ||
+//       !date ||
+//       !location ||
+//       !focalPersonName ||
+//       !focalPersonNumber ||
+//       !focalPersonEmail
+//     ) {
+//       res.status(400).send({ message: "Provide all required fields!" });
+//       return;
+//     }
+
+//     const query = `insert into tbl_event (
+//           eventName,
+//           date,
+//           location,
+//           description,
+//           image,
+//           focalPersonName,
+//           focalPersonNumber,
+//           focalPersonEmail,
+//           infoPersonName,
+//           infoPersonNumber,
+//           infoPersonEmail,
+//           eventType
+//           ) values (?,?,?,?,?,?,?,?,?,?,?,?)`;
+
+//     const values = [
+//       eventName,
+//       date,
+//       location,
+//       description,
+//       image,
+//       focalPersonName,
+//       focalPersonNumber,
+//       focalPersonEmail,
+//       infoPersonName,
+//       infoPersonNumber,
+//       infoPersonEmail,
+//       eventType,
+//     ];
+
+//     const [result]: any = await pool.query(query, values);
+//     const [getEvents]: any = await pool.query(
+//       `select *,
+//                   DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
+//                   from tbl_event where eventName = ? `,
+//       [eventName]
+//     );
+//     res.status(200).send({ ...getEvents[0] });
+//   } catch (error) {
+//     console.error(" Error adding event!:", error);
+//     res.status(500).json({ status: 500, message: "Internal Server Error" });
+//   }
+// };
+
 export const addEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -627,7 +867,6 @@ export const addEvent = async (req: Request, res: Response): Promise<void> => {
       date,
       location,
       description,
-      image,
       focalPersonName,
       focalPersonNumber,
       focalPersonEmail,
@@ -637,48 +876,65 @@ export const addEvent = async (req: Request, res: Response): Promise<void> => {
       eventType,
     } = req.body;
 
+    console.log({ a: req.file, b: req.files });
+
+    // ✅ Use uploaded image from multer
+    const imagePath = req.file?.path;
+
+    console.log({ imagePath });
+
+    // 🔍 Check if event already exists
     const [existingEvent]: any = await pool.query(
-      `select * from tbl_event where eventName= ?`,
+      `SELECT * FROM tbl_event WHERE eventName = ?`,
       [eventName]
     );
 
-    if (existingEvent.lenght > 0) {
-      res.send({ message: "Event already Exist!" });
+    if (existingEvent.length > 0) {
+      res.send({ message: "Event already exists!" });
       return;
     }
+
+    console.log({
+      eventName,
+      date,
+      location,
+      focalPersonName,
+      focalPersonNumber,
+      focalPersonEmail,
+      imagePath,
+    });
+
+    // 🛑 Validate required fields
     if (
       !eventName ||
       !date ||
       !location ||
       !focalPersonName ||
       !focalPersonNumber ||
-      !focalPersonEmail
+      !focalPersonEmail ||
+      !imagePath
     ) {
-      res.status(400).send({ message: "Provide all required fields!" });
+      res
+        .status(400)
+        .send({ message: "Provide all required fields including image!" });
       return;
     }
 
-    const query = `insert into tbl_event (
-          eventName,
-          date,
-          location,
-          description,
-          image,
-          focalPersonName,
-          focalPersonNumber,
-          focalPersonEmail,
-          infoPersonName,
-          infoPersonNumber,
-          infoPersonEmail,
-          eventType
-          ) values (?,?,?,?,?,?,?,?,?,?,?,?)`;
+    // ✅ Insert new event
+    const query = `
+      INSERT INTO tbl_event (
+        eventName, date, location, description, image,
+        focalPersonName, focalPersonNumber, focalPersonEmail,
+        infoPersonName, infoPersonNumber, infoPersonEmail, eventType
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
     const values = [
       eventName,
       date,
       location,
       description,
-      image,
+      imagePath,
       focalPersonName,
       focalPersonNumber,
       focalPersonEmail,
@@ -689,15 +945,17 @@ export const addEvent = async (req: Request, res: Response): Promise<void> => {
     ];
 
     const [result]: any = await pool.query(query, values);
+
+    // 🗓️ Get formatted event response
     const [getEvents]: any = await pool.query(
-      `select *,                 
-                  DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
-                  from tbl_event where eventName = ? `,
+      `SELECT *, DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
+       FROM tbl_event WHERE eventName = ?`,
       [eventName]
     );
+
     res.status(200).send({ ...getEvents[0] });
   } catch (error) {
-    console.error(" Error adding event!:", error);
+    console.error("🔥 Error adding event:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
@@ -706,23 +964,70 @@ export const addEvent = async (req: Request, res: Response): Promise<void> => {
 
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const entry = parseInt(req.params.entry, 10);
-    const limit = !isNaN(entry) && entry > 0 ? entry : 10;
-    const [query]: any = await pool.query(
-      `select *,                 
-          DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
-          from tbl_event where eventStatus = 'Y' limit ?`,
-      [limit]
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = 10;
+    const offset = (page - 1) * limit;
+
+    const [rows]: any = await pool.query(
+      `SELECT 
+        *,
+        DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS eventDate
+      FROM tbl_event 
+      WHERE eventStatus = 'Y' 
+      LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
-    if (query.lenght === 0) {
-      res.send({ message: "No Event Added yet!" });
+
+    const [countResult]: any = await pool.query(
+      `SELECT COUNT(*) AS total FROM tbl_event WHERE eventStatus = 'Y'`
+    );
+    const totalEntries = countResult[0].total;
+    const totalPages = Math.ceil(totalEntries / limit);
+
+    if (!rows || rows.length === 0) {
+      res.status(404).json({ message: "No events found!" });
       return;
     }
 
-    res.status(200).send(query);
+    const events = rows.map((event: any) => {
+      let image: string | null = null;
+
+      if (event.image && fs.existsSync(event.image)) {
+        const imageBuffer = fs.readFileSync(path.resolve(event.image));
+        const mimeType =
+          path.extname(event.image).toLowerCase() === ".png"
+            ? "image/png"
+            : "image/jpeg";
+        image = `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+      }
+
+      return {
+        id: event.id,
+        eventName: event.eventName,
+        date: event.eventDate,
+        location: event.location,
+        description: event.description,
+        eventType: event.eventType,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        presentTime: event.presentTime,
+        eventStatus: event.eventStatus,
+        endNote: event.endNote,
+        endStatus: event.endStatus,
+        focalPersonName: event.focalPersonName,
+        focalPersonNumber: event.focalPersonNumber,
+        focalPersonEmail: event.focalPersonEmail,
+        infoPersonName: event.infoPersonName,
+        infoPersonNumber: event.infoPersonNumber,
+        infoPersonEmail: event.infoPersonEmail,
+        image,
+      };
+    });
+
+    res.status(200).json(events);
   } catch (error) {
-    console.error(" Error adding event!:", error);
-    res.status(500).json({ status: 500, message: "Internal Server Error" });
+    console.error("❌ Error fetching events:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -737,7 +1042,6 @@ export const updateEvent = async (
       date,
       location,
       description,
-      image,
       focalPersonName,
       focalPersonNumber,
       focalPersonEmail,
@@ -746,6 +1050,8 @@ export const updateEvent = async (
       infoPersonEmail,
       eventType,
     } = req.body;
+
+    const newImagePath = req.file?.path; // ✅ Get uploaded image path
 
     if (
       !eventName ||
@@ -759,40 +1065,52 @@ export const updateEvent = async (
       return;
     }
 
-    const [checkExisting]: any = await pool.query(
-      `SELECT *, 
-          DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
-          FROM tbl_event WHERE id = ?`,
+    const [existingEvent]: any = await pool.query(
+      `
+      SELECT *,
+      DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
+      FROM tbl_event WHERE id = ?`,
       [id]
     );
-    if (checkExisting.length === 0) {
+
+    if (existingEvent.length === 0) {
       res.status(404).send({ message: "No Event Found to be updated!" });
       return;
     }
 
+    const oldImagePath = existingEvent[0].image;
+
+    // Decide image path: new uploaded one or retain the old
+    const finalImagePath = newImagePath || oldImagePath;
+
+    // Optional: Delete old image if new one is uploaded
+    if (newImagePath && oldImagePath && fs.existsSync(oldImagePath)) {
+      fs.unlinkSync(oldImagePath); // 🧹 Clean up old file
+    }
+
     const query = `
-          UPDATE tbl_event SET 
-              eventName = ?, 
-              date = ?, 
-              location = ?, 
-              description = ?, 
-              image = ?, 
-              focalPersonName = ?, 
-              focalPersonNumber = ?, 
-              focalPersonEmail = ?, 
-              infoPersonName = ?, 
-              infoPersonNumber = ?, 
-              infoPersonEmail = ?, 
-              eventType = ? 
-          WHERE id = ?
-      `;
+      UPDATE tbl_event SET 
+        eventName = ?, 
+        date = ?, 
+        location = ?, 
+        description = ?, 
+        image = ?, 
+        focalPersonName = ?, 
+        focalPersonNumber = ?, 
+        focalPersonEmail = ?, 
+        infoPersonName = ?, 
+        infoPersonNumber = ?, 
+        infoPersonEmail = ?, 
+        eventType = ? 
+      WHERE id = ?
+    `;
 
     const values = [
       eventName,
       date,
       location,
       description,
-      image,
+      finalImagePath,
       focalPersonName,
       focalPersonNumber,
       focalPersonEmail,
@@ -803,18 +1121,17 @@ export const updateEvent = async (
       id,
     ];
 
-    const [update]: any = await pool.query(query, values);
+    await pool.query(query, values);
 
-    const [getEntry]: any = await pool.query(
-      `select *,
-      DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
-      from tbl_event where id = ?`,
+    const [updatedEvent]: any = await pool.query(
+      `SELECT *, DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS currentDate
+       FROM tbl_event WHERE id = ?`,
       [id]
     );
 
-    res.status(200).send({ ...getEntry[0] });
+    res.status(200).send({ ...updatedEvent[0] });
   } catch (error) {
-    console.error("Error updating event:", error);
+    console.error("❌ Error updating event:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
@@ -912,14 +1229,41 @@ export const getEventById = async (
 ): Promise<void> => {
   try {
     const id = req.params.id;
+
     const [query]: any = await pool.query(
-      `select * from tbl_event where id = ?`,
+      `SELECT *, DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS eventDate FROM tbl_event WHERE id = ?`,
       [id]
     );
 
-    res.status(200).send({ ...query[0] });
+    if (!query || query.length === 0) {
+      res.status(404).json({ message: "Event not found!" });
+      return;
+    }
+
+    const event = query[0];
+
+    // Read image and convert to base64
+    let image: string | null = null;
+
+    try {
+      if (event.image && fs.existsSync(event.image)) {
+        const imageBuffer = fs.readFileSync(path.resolve(event.image));
+        const mimeType =
+          path.extname(event.image).toLowerCase() === ".png"
+            ? "image/png"
+            : "image/jpeg";
+        image = `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+      }
+    } catch (err) {
+      console.warn(`⚠️ Could not read image for event ID ${id}:`, err);
+    }
+
+    res.status(200).send({
+      ...event,
+      image,
+    });
   } catch (error) {
-    console.error("Error fetching event Detail:", error);
+    console.error("❌ Error fetching event detail:", error);
     res.status(500).json({ status: 500, message: "Internal Server Error" });
   }
 };
@@ -931,7 +1275,9 @@ export const startEvent = async (
 ): Promise<void> => {
   try {
     const eventId = req.params.eventId;
-    console.log(eventId, req.body);
+    console.log("📥 Event ID Received:", eventId);
+
+    // Check if already started
     const [checkEvent]: any = await pool.query(
       `SELECT * FROM tbl_events_detail WHERE eventId = ?`,
       [eventId]
@@ -942,27 +1288,51 @@ export const startEvent = async (
       [eventId]
     );
 
+    // If event has not started, insert record and set startTime
     if (checkEvent.length === 0 || !checkEndTime[0]?.startTime) {
       await pool.query(`INSERT INTO tbl_events_detail (eventId) VALUES (?)`, [
         eventId,
       ]);
-
       await pool.query(
         `UPDATE tbl_event SET startTime = CURRENT_TIMESTAMP WHERE id = ?`,
         [eventId]
       );
-
-      // res.send({ message: "Start Time recorded Successfully!" });
     }
 
+    // Fetch full event
     const [result]: any = await pool.query(
-      `SELECT * FROM tbl_event WHERE id = ?`,
+      `SELECT *, DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS eventDate
+       FROM tbl_event WHERE id = ?`,
       [eventId]
     );
 
-    res.status(200).json({ ...result[0] });
+    if (!result || result.length === 0) {
+      res.status(404).json({ message: "Event not found!" });
+      return;
+    }
+
+    const event = result[0];
+    let image: string | null = null;
+
+    try {
+      if (event.image && fs.existsSync(event.image)) {
+        const imageBuffer = fs.readFileSync(path.resolve(event.image));
+        const mimeType =
+          path.extname(event.image).toLowerCase() === ".png"
+            ? "image/png"
+            : "image/jpeg";
+        image = `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+      }
+    } catch (imgErr) {
+      console.warn(`⚠️ Could not read image for event ID ${eventId}:`, imgErr);
+    }
+
+    res.status(200).json({
+      ...event,
+      image,
+    });
   } catch (error) {
-    console.error("Error Creating event!:", error);
+    console.error("❌ Error starting event:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -1434,7 +1804,10 @@ export const getEndMembers = async (
   }
 };
 
-export const searchZones = async (req: Request, res: Response): Promise<void> => {
+export const searchZones = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const searchTerm = req.query.q as string;
 
@@ -1456,7 +1829,10 @@ export const searchZones = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const searchDistricts = async (req: Request, res: Response): Promise<void> => {
+export const searchDistricts = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const searchTerm = req.query.q as string;
 
@@ -1474,6 +1850,241 @@ export const searchDistricts = async (req: Request, res: Response): Promise<void
     res.status(200).json(rows);
   } catch (error) {
     console.error("District Search Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const membersReport = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = parseInt(req.query.limit as string, 10) || 10;
+    const offset = (page - 1) * limit;
+
+    const { district, zone } = req.query;
+
+    let queryStr = `
+      SELECT 
+        id, fullName, fatherName, zone, mobileNumber, address,
+        education, email, cnic, district, age, profession,
+        DATE_FORMAT(CONVERT_TZ(dob, '+00:00', @@session.time_zone), '%Y-%m-%d') AS dob
+      FROM tbl_members
+      WHERE status = 'Y'`;
+
+    let countQueryStr = `SELECT COUNT(*)
+ as total FROM tbl_members WHERE status = 'Y'`;
+
+    const queryParams: any[] = [];
+    const countParams: any[] = [];
+
+    if (district) {
+      queryStr += " AND district = ?";
+      countQueryStr += " AND district = ?";
+      queryParams.push(district);
+      countParams.push(district);
+    }
+
+    if (zone) {
+      queryStr += " AND zone = ?";
+      countQueryStr += " AND zone = ?";
+      queryParams.push(zone);
+      countParams.push(zone);
+    }
+
+    queryStr += " LIMIT ? OFFSET ?";
+    queryParams.push(limit, offset);
+
+    const [rows]: any = await pool.query(queryStr, queryParams);
+    const [countResult]: any = await pool.query(countQueryStr, countParams);
+
+    const totalRecords = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    if (!rows || rows.length === 0) {
+      res.status(404).json({ message: "No User found!" });
+      return;
+    }
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("Error fetching members:", error);
+    res.status(500).json({ status: 500, message: "Internal Server Error" });
+  }
+};
+
+export const EventReport = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { eventName, from, to, page = "1", limit = "10" } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // 🧠 Helper to convert 'DD-MM-YYYY' ➡️ 'YYYY-MM-DD'
+    const convertToMySQLDate = (dateStr: string): string => {
+      const [dd, mm, yyyy] = dateStr.split("-");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    let queryStr = `
+      SELECT 
+        id,
+        eventName,
+        DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%Y-%m-%d') AS eventDate,
+        DATE_FORMAT(CONVERT_TZ(date, '+00:00', @@session.time_zone), '%d-%m-%Y') AS eventDateFormatted,
+        location,
+        description,
+        image,
+        focalPersonName,
+        focalPersonNumber,
+        focalPersonEmail,
+        infoPersonName,
+        infoPersonNumber,
+        infoPersonEmail,
+        eventType,
+        startTime,
+        endTime,
+        presentTime,
+        eventStatus,
+        endNote,
+        endStatus
+      FROM tbl_event 
+      WHERE eventStatus = 'Y'`;
+
+    const queryParams: any[] = [];
+
+    if (eventName) {
+      queryStr += " AND eventName = ?";
+      queryParams.push(eventName);
+    }
+
+    if (from) {
+      const fromFormatted = convertToMySQLDate(from as string);
+      queryStr += " AND date >= ?";
+      queryParams.push(fromFormatted);
+    }
+
+    if (to) {
+      const toFormatted = convertToMySQLDate(to as string);
+      queryStr += " AND date <= ?";
+      queryParams.push(toFormatted);
+    }
+
+    queryStr += " ORDER BY date DESC LIMIT ? OFFSET ?";
+    queryParams.push(limitNum, offset);
+
+    const [rows]: any = await pool.query(queryStr, queryParams);
+
+    if (!rows || rows.length === 0) {
+      res.status(404).json({ message: "No events found" });
+      return;
+    }
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("Error fetching event report:", error);
+    res.status(500).json({ status: 500, message: "Internal Server Error" });
+  }
+};
+
+export const eventDetailReport = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { from, to, page = "1", limit = "10" } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Helper function to convert 'DD-MM-YYYY' ➝ 'YYYY-MM-DD'
+    const convertToMySQLDate = (dateStr: string): string => {
+      const [dd, mm, yyyy] = dateStr.split("-");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    let queryStr = `
+      SELECT 
+        ed.*, 
+        m.fullName, 
+        m.mobileNumber, 
+        e.eventName, 
+        e.date 
+      FROM tbl_events_detail ed
+      JOIN tbl_members m ON m.id = ed.memberId
+      JOIN tbl_event e ON ed.eventId = e.id
+      WHERE 1=1`;
+
+    const queryParams: any[] = [];
+
+    if (from) {
+      const fromFormatted = convertToMySQLDate(from as string);
+      queryStr += " AND e.date >= ?";
+      queryParams.push(fromFormatted);
+    }
+
+    if (to) {
+      const toFormatted = convertToMySQLDate(to as string);
+      queryStr += " AND e.date <= ?";
+      queryParams.push(toFormatted);
+    }
+
+    queryStr += " ORDER BY e.date DESC LIMIT ? OFFSET ?";
+    queryParams.push(limitNum, offset);
+
+    const [query]: any = await pool.query(queryStr, queryParams);
+
+    if (!query || query.length === 0) {
+      res.send({ message: "No event details found!" });
+      return;
+    }
+
+    res.status(200).json(query);
+  } catch (error) {
+    console.error("Error fetching event detail report:", error);
+    res.status(500).json({ status: 500, message: "Internal Server Error" });
+  }
+};
+
+export const searchIndividualPresent = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const searchQuery = req.query.q as string;
+    if (!searchQuery) {
+      res.status(400).json({ message: "Search query is required!" });
+      return;
+    }
+
+    const sql = `
+              SELECT
+                  ed.*,
+                  m.*,
+                  e.eventName,
+                  e.date
+              FROM tbl_events_detail ed
+              JOIN tbl_members m ON m.id = ed.memberId
+              JOIN tbl_event e ON ed.eventId = e.id
+              WHERE
+                  (e.eventName LIKE ? OR
+                  m.fullName LIKE ? OR
+                  m.mobileNumber LIKE ? OR
+                  e.date LIKE ?)
+          `;
+
+    const values = Array(4).fill(`%${searchQuery}%`);
+    const [results]: any = await pool.query(sql, values);
+
+    res.json(results);
+  } catch (error) {
+    console.error("Error searching event details:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
