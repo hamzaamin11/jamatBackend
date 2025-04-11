@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
+import puppeteer from "puppeteer";
 
 interface MulterRequest extends Request {
   file?: Express.Multer.File;
@@ -2086,5 +2087,162 @@ export const searchIndividualPresent = async (
   } catch (error) {
     console.error("Error searching event details:", error);
     res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const downloadReportPdf = async (req: Request, res: Response) => {
+  try {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Members Report</title>
+        <style>
+          body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            padding: 40px;
+            color: #333;
+          }
+
+          header {
+            text-align: center;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 30px;
+          }
+
+          header h1 {
+            font-size: 24px;
+            color: #2c3e50;
+          }
+
+          header p {
+            color: #7f8c8d;
+            margin-top: 5px;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+
+          table th, table td {
+            padding: 12px 15px;
+            border: 1px solid #ccc;
+            text-align: left;
+          }
+
+          table thead {
+            background-color: #2c3e50;
+            color: white;
+          }
+
+          table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+
+          footer {
+            position: fixed;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+          }
+
+          .section-title {
+            margin-top: 30px;
+            font-size: 18px;
+            color: #34495e;
+          }
+
+          .info-block {
+            margin-bottom: 20px;
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>Members Report</h1>
+          <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        </header>
+
+        <div class="info-block">
+          <h2 class="section-title">Summary</h2>
+          <p>Total Members: 100</p>
+          <p>Active Members: 85</p>
+          <p>Inactive Members: 15</p>
+        </div>
+
+        <h2 class="section-title">Detailed Member List</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Join Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Ali Khan</td>
+              <mailto:td>ali@example.com</td>
+              <td>Active</td>
+              <td>2023-05-10</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>Sara Ahmed</td>
+              <mailto:td>sara@example.com</td>
+              <td>Inactive</td>
+              <td>2022-11-19</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <footer>
+          &copy; 2025 Your Company Name. All rights reserved.
+        </footer>
+      </body>
+      </html>
+    `;
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+
+    const page = await browser.newPage();
+
+    // Load HTML content directly with inline styles
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    await page.emulateMediaType("screen");
+
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "3cm",
+        bottom: "3cm",
+        left: "3cm",
+        right: "3cm"
+      }
+    });
+
+    await browser.close();
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": "attachment; filename=members_report.pdf"
+    });
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("📄 Puppeteer PDF error:", error);
+    res.status(500).json({ message: "Failed to generate PDF" });
   }
 };

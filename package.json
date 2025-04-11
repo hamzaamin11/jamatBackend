@@ -23,7 +23,8 @@
   "main": "server.ts",
   "scripts": {
     "dev": "npx ts-node backend/server.ts",
-    "start": "nodemon server.ts"
+    "start": "nodemon server.ts",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
