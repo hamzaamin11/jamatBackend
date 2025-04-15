@@ -2213,7 +2213,7 @@ export const downloadReportPdf = async (req: Request, res: Response) => {
 
     const browser = await puppeteer.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
@@ -2229,16 +2229,18 @@ export const downloadReportPdf = async (req: Request, res: Response) => {
         top: "3cm",
         bottom: "3cm",
         left: "3cm",
-        right: "3cm"
-      }
+        right: "3cm",
+      },
     });
 
     await browser.close();
 
     res.set({
       "Content-Type": "application/pdf",
-      "Content-Disposition": "attachment; filename=members_report.pdf"
+      "Content-Disposition": "attachment; filename=members_report.pdf",
     });
+
+    fs.writeFileSync("test.pdf", pdfBuffer);
 
     res.send(pdfBuffer);
   } catch (error) {

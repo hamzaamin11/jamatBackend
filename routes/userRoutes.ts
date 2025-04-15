@@ -36,6 +36,7 @@ import {
   updateMember,
   updateZone,
   uploadImage,
+  downloadReportPdf,
 } from "../controllers/userController";
 import { authenticateToken } from "../middleware/authMiddleware";
 
@@ -108,4 +109,6 @@ export default (app: Application): void => {
   app.get("/user/individualMemberReport", eventDetailReport);
 
   app.get("/user/searchIndividualPresent", searchIndividualPresent);
+
+  app.get("/user/download-report", downloadReportPdf);
 };
